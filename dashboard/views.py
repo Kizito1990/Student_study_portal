@@ -3,6 +3,9 @@ from django.contrib import messages
 from .forms import *
 from django.views import generic
 from youtubesearchpython import VideosSearch
+import requests
+from youtubesearchpython import VideosSearch
+
 
 
 
@@ -95,47 +98,45 @@ def delete_homework(request, pk=None):
     return redirect('homework')
 
 
-
 def youtube(request):
-    
     if request.method == 'POST':
         form = DashboardForm(request.POST)
-        text = request.POST['text']
+        text = request.POST.get('text', '')  # Use .get() to avoid KeyError
         video = VideosSearch(text, limit=10) 
+        
         result_list = []
-        for i in video.result()['result']:
+        video_results = video.result().get('result', [])  # Ensure no KeyError
+        
+        for i in video_results:
             result_dict = { 
-                'input':text,
-                'title':i['title'],
-                'duration':i['duration'],
-                'thumbnail':i['thumbnails'][0]['url'],
-                'channel':i['channel']['name'],
-                'link':i['link'],
-                'views':i['viewCount']['short'],
-                'published':i['publishedTime']
+                'input': text,
+                'title': i.get('title', 'No Title'),
+                'duration': i.get('duration', 'N/A'),
+                'thumbnail': i.get('thumbnails', [{}])[0].get('url', ''),  # Get first thumbnail safely
+                'channel': i.get('channel', {}).get('name', 'Unknown Channel'),
+                'link': i.get('link', '#'),
+                'views': i.get('viewCount', {}).get('short', 'No Views'),
+                'published': i.get('publishedTime', 'Unknown Date')
             }
 
+            # Handle missing 'descriptionSnippet'
             desc = ''
-            if i['descriptionSnippet']:
-                for j in i['descriptionSnippet']:
-                    desc += j['text']
+            if 'descriptionSnippet' in i and i['descriptionSnippet']:
+                desc = ''.join([j.get('text', '') for j in i['descriptionSnippet']])
+            
             result_dict['description'] = desc
             result_list.append(result_dict)
-            context = {
-        'form':form,
-    }
+
+        context = {
+            'form': form,
+            'results': result_list,  # Pass results to template
+        }
         return render(request, 'dashboard/youtube.html', context)
     
-
-     
     else:
         form = DashboardForm()
 
-
-    context = {
-        'form':form,
-    }
-    return render(request, 'dashboard/youtube.html', context)
+    return render(request, 'dashboard/youtube.html', {'form': form})
 
 
 def todo(request):
@@ -190,3 +191,48 @@ def update_todo(request, pk=None):
 def delete_todo(request, pk):
     Todo.objects.get(id = pk).delete()
     return redirect('todo')
+
+
+
+
+def books(request):
+    if request.method == 'POST':
+        form = DashboardForm(request.POST)
+        text = request.POST.get('text', '')  # Use .get() to prevent KeyError
+        url = f"https://www.googleapis.com/books/v1/volumes?q={text}"
+        
+        try:
+            r = requests.get(url, timeout=10)  # Set timeout for network stability
+            r.raise_for_status()  # Raise an error for HTTP errors (e.g., 404, 500)
+            answer = r.json()
+        except requests.exceptions.RequestException as e:
+            return render(request, 'dashboard/books.html', {'form': form, 'error': f"Error fetching books: {e}"})
+
+        result_list = []
+        if 'items' in answer:  # Check if the response contains 'items'
+            for item in answer['items'][:10]:  # Safely iterate over available items
+                volume_info = item.get('volumeInfo', {})
+
+                result_dict = { 
+                    'title': volume_info.get('title', 'No Title'),
+                    'subtitle': volume_info.get('subtitle', 'No Subtitle'),
+                    'description': volume_info.get('description', 'No Description'),
+                    'count': volume_info.get('pageCount', 'N/A'),
+                    'categories': volume_info.get('categories', []),
+                    'rating': volume_info.get('averageRating', 'No Rating'),
+                    'thumbnail': volume_info.get('imageLinks', {}).get('thumbnail', ''),  # Get the thumbnail
+                    'preview': volume_info.get('previewLink', '#')  # Default to '#' if no preview link
+                }
+
+                result_list.append(result_dict)
+
+        context = {
+            'form': form,
+            'results': result_list,  # Pass results to template
+        }
+        return render(request, 'dashboard/books.html', context)
+    
+    else:
+        form = DashboardForm()
+
+    return render(request, 'dashboard/books.html', {'form': form})
