@@ -3,8 +3,9 @@ from django.contrib import messages
 from .forms import *
 from django.views import generic
 from youtubesearchpython import VideosSearch
-import requests
+import requests, wikipedia
 from youtubesearchpython import VideosSearch
+
 
 
 
@@ -236,3 +237,118 @@ def books(request):
         form = DashboardForm()
 
     return render(request, 'dashboard/books.html', {'form': form})
+
+
+'''def dictionary(request):
+
+    if request.method == 'POST':
+        form = DashboardForm(request.POST)
+        text = request.POST.get('text', '')  # Use .get() to prevent KeyError
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en_US"+text
+        r = requests.get(url)
+   
+        answer = r.json()
+        try:
+            phonetics = answer[0]['phonetics'][0]['text']
+            audio = answer[0]['phonetics'][0]['audio']
+            definition = answer[0]['meanings'][0]['definitions'][0]['definition']
+            example = answer[0]['meanings'][0]['definitions'][0]['example']
+            synonyms = answer[0]['meanings'][0]['definitions'][0]['synonyms']
+            context = {
+                'form':form,
+                'input':text,
+                'phonetics':phonetics,
+                'audio': audio,
+                'definition':definition,
+                'example':example,
+                'synonyms':synonyms,
+            }
+        except:
+            context = {
+            'form':form,
+            'input':''
+        }
+        return render(request, "dashboard/dictionary.html", context) 
+    else:
+        form = DashboardForm()
+        context = {
+        'form':form
+        }
+    return render(request, "dashboard/dictionary.html", context) 
+'''
+
+def dictionary(request):
+    if request.method == 'POST':
+        form = DashboardForm(request.POST)
+        text = request.POST.get('text', '').strip()  # Remove any extra spaces
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en_US/{text}"
+        
+        try:
+            r = requests.get(url, timeout=10)  # Set a timeout to avoid hanging requests
+            r.raise_for_status()  # Raise an error for HTTP failures (e.g., 404, 500)
+            answer = r.json()
+
+            # Extract data safely using .get() and list indexing checks
+            phonetics = answer[0].get('phonetics', [{}])[0].get('text', 'No phonetics available')
+            audio = answer[0].get('phonetics', [{}])[0].get('audio', '')
+            definition = answer[0].get('meanings', [{}])[0].get('definitions', [{}])[0].get('definition', 'No definition found')
+            example = answer[0].get('meanings', [{}])[0].get('definitions', [{}])[0].get('example', 'No example available')
+            synonyms = answer[0].get('meanings', [{}])[0].get('definitions', [{}])[0].get('synonyms', [])
+
+            context = {
+                'form': form,
+                'input': text,
+                'phonetics': phonetics,
+                'audio': audio,
+                'definition': definition,
+                'example': example,
+                'synonyms': synonyms,
+            }
+        except requests.exceptions.RequestException as e:  # Handle API request errors
+            context = {
+                'form': form,
+                'input': text,
+                'error': f"Error fetching definition: {e}",
+            }
+        except (KeyError, IndexError):  # Handle missing dictionary fields
+            context = {
+                'form': form,
+                'input': text,
+                'error': "Word not found. Please try another word.",
+            }
+
+        return render(request, "dashboard/dictionary.html", context)
+    
+    else:
+        form = DashboardForm()
+        return render(request, "dashboard/dictionary.html", {'form': form})
+
+def wiki(request):
+    if request.method == 'POST':
+        text = request.POST['text']
+        form = DashboardForm(request.POST)
+        search = wikipedia.page(text)
+        context ={
+            'form':form,
+            'title':search.title,
+            'link':search.url,
+            'details':search.summary
+        }
+    
+        return render(request,'dashboard/wiki.html', context)
+        
+    else:
+        form = DashboardForm()
+        context = {
+            'form':form
+    }
+    return render(request, 'dashboard/wiki.html', context)
+
+def conversion(request):
+    form = ConversionForm()
+
+    context = {
+        'form':form,
+        'input':False
+    }
+    return render(request, 'dashboard/conversion.html', context)
