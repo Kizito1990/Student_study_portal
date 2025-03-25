@@ -1,0 +1,10 @@
+<h1>Update your your Tasks</h1>
+
+<div class="container">
+    <form method="POST">
+        {% csrf_token %}
+        {{form}}
+        <input class="btn btn-success" type="submit" value = "update">
+    </form>
+
+</div>
